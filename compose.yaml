@@ -1,0 +1,96 @@
+services:
+  # nfcReader
+  reader:
+    build: ./app/utils/reader
+    container_name: reader
+    restart: always
+    working_dir: /usr/coop
+    volumes:
+      - ./app/utils/sqls:/usr/coop/sqls
+      - ./app/utils/reader/nfc_read.py:/usr/coop/nfc_read.py
+      - ./app/utils/connect_db.py:/usr/coop/connect_db.py
+    tty: true
+    privileged: true
+    environment:
+      - DB_HOST=db
+      - DB_USER=srv-admin
+      - DB_PW=704lIlac
+      - DB_NAME=test_database
+    networks:
+      - app-net
+
+  app:
+    build: ./app
+    container_name: app
+    restart: always
+    volumes:
+      - ./app/app.py/:/usr/app.py
+      - .app/utils/connect_db.py:/usr/utils/connect_db.py
+    tty: true
+    ports:
+      - 8080:8080
+    environment:
+      - DB_HOST=db
+      - DB_USER=srv-admin
+      - DB_PW=704lIlac
+      - DB_NAME=test_database
+    networks:
+      - app-net
+
+  # RabbitMQ
+  rabbitmq:
+    # -management を付与したイメージの場合、15672ポートでManagement Plugin(Web UIのようなもの)が利用
+    # イメージは現時点で最新のものを指定している
+    # http://localhost:15672でrabbitMQのWebUIにアクセス
+    image: rabbitmq:3.11.7-management
+    container_name: rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+    # ユーザ名/パスワードの設定
+    # 特に設定しない場合、guest/guestが暗黙的に設定される
+    environment:
+      - RABBITMQ_DEFAULT_USER=srv-admin
+      - RABBITMQ_DEFAULT_PASS=704lIlac
+    restart: always
+    networks:
+      - app-net
+
+  # MYSQL
+  db:
+    container_name: db
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: test_database
+      MYSQL_USER: srv-admin
+      MYSQL_PASSWORD: 704lIlac
+    command: mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db-store:/var/lib/mysql
+      - ./docker/db/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./docker/db/initdb.d:/docker-entrypoint-initdb.d
+    networks:
+      - app-net
+
+  # phpMyAdmin
+  # http://localhost:8081でDBのWebUIにアクセス
+  phpmyadmin:
+    container_name: test_phpmyadmin
+    image: phpmyadmin/phpmyadmin
+    environment:
+    - PMA_ARBITRARY=1
+    - PMA_HOSTS=db
+    - PMA_USER=root
+    - PMA_PASSWORD=root
+    ports:
+    - 8081:80
+    networks:
+      - app-net
+
+volumes:
+  db-store:
+
+networks:
+  app-net:
+    driver: bridge
